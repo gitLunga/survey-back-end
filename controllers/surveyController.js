@@ -4,35 +4,47 @@ exports.createSurvey = (req, res) => {
     const {
         fullName,
         email,
-        age,
         birthDate,
+        contactNumber,
         favoriteFood,
         eatOutRating,
         watchMoviesRating,
-        watchTvRating,
-        listenToRadioRating
+        listenToRadioRating,
+        watchTvRating
     } = req.body;
 
-    // Handle favoriteFood (convert to string if it's an array)
-    const favoriteFoodValue = Array.isArray(favoriteFood) 
-        ? favoriteFood.join(',') 
-        : favoriteFood;
+    // Validate all required ratings are provided
+    if (!eatOutRating || !watchMoviesRating || !listenToRadioRating || !watchTvRating) {
+        return res.status(400).json({ 
+            message: 'All rating questions must be answered',
+            details: {
+                missingRatings: {
+                    eatOut: !eatOutRating,
+                    movies: !watchMoviesRating,
+                    radio: !listenToRadioRating,
+                    tv: !watchTvRating
+                }
+            }
+        });
+    }
+
+    const favoriteFoodValue = Array.isArray(favoriteFood) ? favoriteFood.join(',') : favoriteFood;
 
     const sql = `INSERT INTO surveys 
-        (full_name, email, age, birth_date, favorite_food, eat_out_rating, 
-         watch_movies_rating, watch_tv_rating, listen_to_radio_rating) 
+        (full_name, email, birth_date, contact_number, favorite_food, 
+         eat_out_rating, watch_movies_rating, listen_to_radio_rating, watch_tv_rating) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
     
     db.query(sql, [
         fullName, 
         email, 
-        age, 
         birthDate, 
+        contactNumber || null,
         favoriteFoodValue, 
         eatOutRating, 
         watchMoviesRating, 
-        watchTvRating, 
-        listenToRadioRating
+        listenToRadioRating, 
+        watchTvRating
     ], (error, results) => {
         if (error) {
             console.error('Survey submission error:', error);
@@ -58,10 +70,6 @@ exports.getSurveyResults = (req, res) => {
         }
 
         const totalSurveys = surveys.length;
-        const ages = surveys.map(s => s.age);
-        const avgAge = (ages.reduce((a, b) => a + b, 0) / totalSurveys);
-        const oldest = Math.max(...ages);
-        const youngest = Math.min(...ages);
         
         // Calculate food preferences
         const pizzaLovers = surveys.filter(s => s.favorite_food.includes('Pizza')).length;
@@ -69,21 +77,20 @@ exports.getSurveyResults = (req, res) => {
         const papWorsLovers = surveys.filter(s => s.favorite_food.includes('Pap and Wors')).length;
         
         // Calculate average ratings
-        const avgRatings = {};
-        ['eat_out', 'watch_movies', 'listen_to_radio', 'watch_tv'].forEach(prefix => {
-            const sum = surveys.reduce((total, s) => total + s[`${prefix}_rating`], 0);
-            avgRatings[`${prefix}Rating`] = (sum / totalSurveys).toFixed(1);
-        });
+        const avgEatOut = surveys.reduce((sum, s) => sum + s.eat_out_rating, 0) / totalSurveys;
+        const avgMovies = surveys.reduce((sum, s) => sum + s.watch_movies_rating, 0) / totalSurveys;
+        const avgRadio = surveys.reduce((sum, s) => sum + s.listen_to_radio_rating, 0) / totalSurveys;
+        const avgTv = surveys.reduce((sum, s) => sum + s.watch_tv_rating, 0) / totalSurveys;
 
         res.json({
             totalSurveys,
-            avgAge: avgAge.toFixed(1),
-            oldest,
-            youngest,
             pizzaPercentage: ((pizzaLovers / totalSurveys) * 100).toFixed(1),
             pastaPercentage: ((pastaLovers / totalSurveys) * 100).toFixed(1),
             papWorsPercentage: ((papWorsLovers / totalSurveys) * 100).toFixed(1),
-            ...avgRatings
+            avgEatOut: avgEatOut.toFixed(1),
+            avgMovies: avgMovies.toFixed(1),
+            avgRadio: avgRadio.toFixed(1),
+            avgTv: avgTv.toFixed(1)
         });
     });
 };
